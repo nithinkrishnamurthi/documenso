@@ -17,6 +17,7 @@ import {
 import { createDocumentFromTemplate } from '@documenso/lib/server-only/template/create-document-from-template';
 import { createTemplateDirectLink } from '@documenso/lib/server-only/template/create-template-direct-link';
 import { deleteTemplate } from '@documenso/lib/server-only/template/delete-template';
+import { toggleTemplateFavorite } from '@documenso/lib/server-only/template/toggle-template-favorite';
 import { deleteTemplateDirectLink } from '@documenso/lib/server-only/template/delete-template-direct-link';
 import { findOrganisationTemplates } from '@documenso/lib/server-only/template/find-organisation-templates';
 import { findTemplates } from '@documenso/lib/server-only/template/find-templates';
@@ -57,6 +58,8 @@ import {
   ZGetTemplateByIdResponseSchema,
   ZToggleTemplateDirectLinkRequestSchema,
   ZToggleTemplateDirectLinkResponseSchema,
+  ZToggleTemplateFavoriteMutationSchema,
+  ZToggleTemplateFavoriteResponseSchema,
   ZUpdateTemplateRequestSchema,
   ZUpdateTemplateResponseSchema,
 } from './schema';
@@ -122,6 +125,7 @@ export const templateRouter = router({
             ),
             templateMeta: envelope.documentMeta,
             directLink: envelope.directLink,
+            favorited: envelope.favorited,
           };
         }),
       };
@@ -171,6 +175,7 @@ export const templateRouter = router({
             ),
             templateMeta: envelope.documentMeta,
             directLink: envelope.directLink,
+            favorited: envelope.favorited,
           };
         }),
       };
@@ -518,6 +523,34 @@ export const templateRouter = router({
       });
 
       return ZGenericSuccessResponse;
+    }),
+
+  /**
+   * @public
+   */
+  toggleFavorite: authenticatedProcedure
+    .meta({
+      openapi: {
+        method: 'POST',
+        path: '/template/toggle-favorite',
+        summary: 'Toggle template favorite',
+        tags: ['Template'],
+      },
+    })
+    .input(ZToggleTemplateFavoriteMutationSchema)
+    .output(ZToggleTemplateFavoriteResponseSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { teamId } = ctx;
+      const { templateId } = input;
+      const userId = ctx.user.id;
+
+      ctx.logger.info({ input: { templateId } });
+
+      return await toggleTemplateFavorite({
+        userId,
+        id: { type: 'templateId', id: templateId },
+        teamId,
+      });
     }),
 
   /**

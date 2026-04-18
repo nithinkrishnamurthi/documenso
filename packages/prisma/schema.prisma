@@ -421,6 +421,7 @@ model Envelope {
   publicDescription String              @default("")
   directLink        TemplateDirectLink?
   templateId        Int?
+  favorited         Boolean             @default(false)
 
   // Relations
   userId Int /// @zod.number.describe("The ID of the user that created this document.")

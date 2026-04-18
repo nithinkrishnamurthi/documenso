@@ -141,6 +141,7 @@ export const ZTemplateManySchema = TemplateSchema.pick({
   publicDescription: true,
   folderId: true,
   useLegacyFieldInsertion: true,
+  favorited: true,
 }).extend({
   envelopeId: z.string(),
   team: TeamSchema.pick({

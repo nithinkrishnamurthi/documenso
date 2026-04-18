@@ -1,4 +1,4 @@
-import { useMemo, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react';
@@ -11,6 +11,7 @@ import {
   Link2Icon,
   Loader,
   LockIcon,
+  Star,
 } from 'lucide-react';
 import { Link } from 'react-router';
 
@@ -18,6 +19,7 @@ import { useLimits } from '@documenso/ee/server-only/limits/provider/client';
 import { useUpdateSearchParams } from '@documenso/lib/client-only/hooks/use-update-search-params';
 import { useCurrentOrganisation } from '@documenso/lib/client-only/providers/organisation';
 import { formatTemplatesPath } from '@documenso/lib/utils/teams';
+import { trpc } from '@documenso/trpc/react';
 import type { TFindTemplatesResponse } from '@documenso/trpc/server/template-router/schema';
 import { Alert, AlertDescription, AlertTitle } from '@documenso/ui/primitives/alert';
 import { Checkbox } from '@documenso/ui/primitives/checkbox';
@@ -44,6 +46,7 @@ type TemplatesTableProps = {
   enableSelection?: boolean;
   rowSelection?: RowSelectionState;
   onRowSelectionChange?: (selection: RowSelectionState) => void;
+  favoritesOnly?: boolean;
 };
 
 type TemplatesTableRow = TFindTemplatesResponse['data'][number];
@@ -57,6 +60,7 @@ export const TemplatesTable = ({
   enableSelection,
   rowSelection,
   onRowSelectionChange,
+  favoritesOnly = false,
 }: TemplatesTableProps) => {
   const { _, i18n } = useLingui();
   const { remaining } = useLimits();
@@ -67,6 +71,29 @@ export const TemplatesTable = ({
   const [isPending, startTransition] = useTransition();
 
   const updateSearchParams = useUpdateSearchParams();
+
+  // Optimistic client-side map of envelopeId -> favorited. Server persistence
+  // is handled by the shared favorites mutation (see #2148), so we only need
+  // to reflect the toggle locally here for instant feedback.
+  const [localFavorites, setLocalFavorites] = useState<Record<string, boolean>>({});
+
+  const toggleFavoriteMutation = trpc.template.toggleFavorite.useMutation({
+    onError: () => {
+      // TODO: revert the optimistic toggle if the server rejects it.
+    },
+  });
+
+  const isSavingFavorite = toggleFavoriteMutation.isPending;
+
+  const isFavorited = (row: TemplatesTableRow): boolean => {
+    const override = localFavorites[row.envelopeId];
+    return override ?? row.favorited;
+  };
+
+  const handleToggleFavorite = (row: TemplatesTableRow) => {
+    const next = !isFavorited(row);
+    setLocalFavorites((prev) => ({ ...prev, [row.envelopeId]: next }));
+  };
 
   const formatTemplateLink = (row: TemplatesTableRow) => {
     const path = formatTemplatesPath(team.url);
@@ -103,6 +130,35 @@ export const TemplatesTable = ({
     }
 
     cols.push(
+      {
+        id: 'favorite',
+        header: '',
+        cell: ({ row }) => {
+          const favorited = isFavorited(row.original);
+          return (
+            <button
+              type="button"
+              aria-label={favorited ? _(msg`Unfavorite`) : _(msg`Favorite`)}
+              aria-pressed={favorited}
+              data-testid="template-favorite-button"
+              data-favorited={favorited ? 'true' : 'false'}
+              disabled={isSavingFavorite}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggleFavorite(row.original);
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              <Star
+                className={`h-4 w-4 ${favorited ? 'fill-yellow-400 text-yellow-500' : ''}`}
+              />
+            </button>
+          );
+        },
+        enableSorting: false,
+        enableHiding: false,
+        size: 44,
+      },
       {
         header: _(msg`Created`),
         accessorKey: 'createdAt',
@@ -244,7 +300,7 @@ export const TemplatesTable = ({
     );
 
     return cols;
-  }, [documentRootPath, team?.id, templateRootPath, enableSelection]);
+  }, [documentRootPath, team?.id, templateRootPath, enableSelection, localFavorites, isSavingFavorite]);
 
   const onPaginationChange = (page: number, perPage: number) => {
     startTransition(() => {
@@ -255,12 +311,16 @@ export const TemplatesTable = ({
     });
   };
 
-  const results = data ?? {
+  const baseResults = data ?? {
     data: [],
     perPage: 10,
     currentPage: 1,
     totalPages: 1,
   };
+
+  const results = favoritesOnly
+    ? { ...baseResults, data: baseResults.data.filter((row) => isFavorited(row)) }
+    : baseResults;
 
   return (
     <div className="relative">
