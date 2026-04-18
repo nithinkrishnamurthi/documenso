@@ -1,11 +1,14 @@
 # Drop this file at .github/workflows/valid-demo.yml in the fork.
 #
-# Fires on every push to a PR branch. POSTs the PR coordinates to your smee
-# channel, which the local webhook receiver picks up and kicks off a run.
+# Fires on every push to a PR branch. POSTs the PR coordinates to the smee
+# channel with a Bearer VALID_API_KEY header. Smee forwards the request —
+# headers included — to the api server's /environments/<env_id>/validate
+# endpoint, which dispatches the job to our local preview handler.
 #
 # Repo secrets required:
-#   VALID_SMEE_URL        — e.g. https://smee.io/abc123xyz
-#   VALID_WEBHOOK_SECRET  — must match demo/config.yml webhook_secret
+#   VALID_SMEE_URL   — e.g. https://smee.io/abc123xyz
+#   VALID_API_KEY    — api key for the team that owns the external env
+#                      (create with: cd website/api && go run . --create-key <team>)
 
 name: valid-demo
 
@@ -17,17 +20,17 @@ jobs:
   notify:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping local valid runner via smee
+      - name: Ping local valid handler via smee
         env:
           SMEE_URL: ${{ secrets.VALID_SMEE_URL }}
-          WEBHOOK_SECRET: ${{ secrets.VALID_WEBHOOK_SECRET }}
+          VALID_API_KEY: ${{ secrets.VALID_API_KEY }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          if [ -z "$SMEE_URL" ] || [ -z "$WEBHOOK_SECRET" ]; then
-            echo "secrets VALID_SMEE_URL / VALID_WEBHOOK_SECRET not configured" >&2
+          if [ -z "$SMEE_URL" ] || [ -z "$VALID_API_KEY" ]; then
+            echo "secrets VALID_SMEE_URL / VALID_API_KEY not configured" >&2
             exit 1
           fi
           payload=$(jq -nc \
@@ -39,5 +42,5 @@ jobs:
           echo "payload: $payload"
           curl -fsS -X POST "$SMEE_URL" \
             -H "Content-Type: application/json" \
-            -H "X-Valid-Secret: $WEBHOOK_SECRET" \
+            -H "Authorization: Bearer $VALID_API_KEY" \
             -d "$payload"
