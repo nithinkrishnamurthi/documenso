@@ -45,6 +45,22 @@ jobs:
       - name: Bring up backing services
         run: npm run dx:up
 
+      - name: Wait for Postgres
+        run: |
+          # `docker compose up -d` returns once containers are created, not
+          # when they're ready. Prisma migrate needs an actually-accepting
+          # database. Container name + user are app-specific — adjust per repo.
+          for i in $(seq 1 90); do
+            if docker exec database pg_isready -U documenso -d documenso >/dev/null 2>&1; then
+              echo "postgres ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "postgres did not become ready in 180s" >&2
+          docker ps -a >&2
+          docker logs database 2>&1 | tail -80 >&2
+          exit 1
+
       - name: Migrate + seed database
         run: |
           npm run prisma:migrate-dev
