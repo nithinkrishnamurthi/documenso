@@ -226,6 +226,14 @@ export const ZDeleteTemplateMutationSchema = z.object({
   templateId: z.number(),
 });
 
+export const ZToggleTemplateFavoriteMutationSchema = z.object({
+  templateId: z.number(),
+});
+
+export const ZToggleTemplateFavoriteResponseSchema = z.object({
+  favorited: z.boolean(),
+});
+
 /**
  * Note: This is the same between V1 and V2. Be careful when updating this schema and think of the consequences.
  */

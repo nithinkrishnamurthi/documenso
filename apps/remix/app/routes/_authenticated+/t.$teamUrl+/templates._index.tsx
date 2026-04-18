@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { msg } from '@lingui/core/macro';
 import { Trans } from '@lingui/react/macro';
 import { EnvelopeType, OrganisationType } from '@prisma/client';
-import { Bird } from 'lucide-react';
+import { Bird, Star } from 'lucide-react';
 import { parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useParams, useSearchParams } from 'react-router';
 
@@ -58,6 +58,7 @@ export default function TemplatesPage() {
   );
   const [isBulkMoveDialogOpen, setIsBulkMoveDialogOpen] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   const selectedEnvelopeIds = useMemo(() => {
     return Object.keys(rowSelection).filter((id) => rowSelection[id]);
@@ -139,7 +140,26 @@ export default function TemplatesPage() {
             </div>
           )}
 
-          <div className="mt-8">
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              aria-pressed={favoritesOnly}
+              data-testid="templates-favorites-only-toggle"
+              onClick={() => setFavoritesOnly((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors ${
+                favoritesOnly
+                  ? 'border-yellow-400 bg-yellow-50 text-yellow-900 dark:bg-yellow-400/10 dark:text-yellow-200'
+                  : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <Star
+                className={`h-4 w-4 ${favoritesOnly ? 'fill-yellow-400 text-yellow-500' : ''}`}
+              />
+              <Trans>Favorites only</Trans>
+            </button>
+          </div>
+
+          <div className="mt-4">
             {activeQuery.data && activeQuery.data.count === 0 ? (
               <div className="flex h-96 flex-col items-center justify-center gap-y-4 text-muted-foreground/60">
                 <Bird className="h-12 w-12" strokeWidth={1.5} />
@@ -171,6 +191,7 @@ export default function TemplatesPage() {
                 enableSelection={!isOrgView}
                 rowSelection={isOrgView ? {} : rowSelection}
                 onRowSelectionChange={isOrgView ? undefined : setRowSelection}
+                favoritesOnly={favoritesOnly}
               />
             )}
           </div>
