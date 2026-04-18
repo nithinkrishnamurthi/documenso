@@ -73,11 +73,10 @@ jobs:
           tail -n 200 app.log >&2
           exit 1
 
-      - uses: nithinkrishnamurthi/vetter/action@v1
+      - uses: nithinkrishnamurthi/vetter/action@main
         with:
           api-key: ${{ secrets.VETTER_API_KEY }}
           env-id: ${{ secrets.VETTER_ENV_ID }}
-          daemon-token: ${{ secrets.VETTER_DAEMON_TOKEN }}
           api-base: ${{ vars.VETTER_API_BASE }}
           daemon-url: ${{ vars.VETTER_DAEMON_URL }}
           app-url: http://localhost:3000
