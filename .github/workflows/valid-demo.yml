@@ -1,0 +1,43 @@
+# Drop this file at .github/workflows/valid-demo.yml in the fork.
+#
+# Fires on every push to a PR branch. POSTs the PR coordinates to your smee
+# channel, which the local webhook receiver picks up and kicks off a run.
+#
+# Repo secrets required:
+#   VALID_SMEE_URL        — e.g. https://smee.io/abc123xyz
+#   VALID_WEBHOOK_SECRET  — must match demo/config.yml webhook_secret
+
+name: valid-demo
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping local valid runner via smee
+        env:
+          SMEE_URL: ${{ secrets.VALID_SMEE_URL }}
+          WEBHOOK_SECRET: ${{ secrets.VALID_WEBHOOK_SECRET }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ -z "$SMEE_URL" ] || [ -z "$WEBHOOK_SECRET" ]; then
+            echo "secrets VALID_SMEE_URL / VALID_WEBHOOK_SECRET not configured" >&2
+            exit 1
+          fi
+          payload=$(jq -nc \
+            --arg repo "$REPO" \
+            --argjson pr "$PR" \
+            --arg sha "$SHA" \
+            --arg ref "$HEAD_REF" \
+            '{repo:$repo, pr:$pr, sha:$sha, pr_head_ref:$ref}')
+          echo "payload: $payload"
+          curl -fsS -X POST "$SMEE_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Valid-Secret: $WEBHOOK_SECRET" \
+            -d "$payload"
