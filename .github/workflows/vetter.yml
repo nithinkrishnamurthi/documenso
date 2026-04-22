@@ -1,0 +1,90 @@
+name: vetter
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: vetter-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    env:
+      APP_PORT: 3000
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Configure env
+        run: cp .env.example .env
+
+      - name: Bring up backing services
+        run: npm run dx:up
+
+      - name: Wait for Postgres
+        run: |
+          # `docker compose up -d` returns once containers are created, not
+          # when they're ready. Prisma migrate needs an actually-accepting
+          # database.
+          for i in $(seq 1 90); do
+            if docker exec database pg_isready -U documenso -d documenso >/dev/null 2>&1; then
+              echo "postgres ready"; exit 0
+            fi
+            sleep 2
+          done
+          echo "postgres did not become ready in 180s" >&2
+          docker ps -a >&2
+          docker logs database 2>&1 | tail -80 >&2
+          exit 1
+
+      - name: Migrate + seed database
+        run: |
+          npm run prisma:migrate-dev
+          npm run prisma:seed || true
+
+      - name: Start app
+        run: |
+          nohup npm run dev > app.log 2>&1 &
+          echo "$!" > app.pid
+          for i in $(seq 1 180); do
+            if curl -sf "http://localhost:$APP_PORT" >/dev/null; then
+              echo "app up"; exit 0
+            fi
+            sleep 2
+          done
+          echo "app did not come up" >&2
+          tail -n 200 app.log >&2
+          exit 1
+
+      - uses: nithinkrishnamurthi/vetter/action@main
+        with:
+          api-key: ${{ secrets.VETTER_API_KEY }}
+          api-base: ${{ vars.VETTER_API_BASE }}
+          daemon-url: ${{ vars.VETTER_DAEMON_URL }}
+          app-url: http://localhost:3000
+
+      - name: Upload app logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-logs-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          path: |
+            app.log
+          if-no-files-found: ignore
